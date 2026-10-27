@@ -14,7 +14,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Confetti from 'react-confetti';
 import { motion } from 'framer-motion';
 
-// ─── Send result email via n8n AI agent ──────────────────────────────────────
+// --- Send result email via n8n AI agent ---
 const N8N_WEBHOOK_URL = 'https://arunpandian1997.app.n8n.cloud/webhook/chat';
 
 async function sendResultEmail(userId, resultData) {
@@ -24,11 +24,11 @@ async function sendResultEmail(userId, resultData) {
         const userPhone = localStorage.getItem('disc_user_phone') || '';
 
         if (!userEmail) {
-            console.warn('No user email in localStorage — skipping result email.');
+            console.warn('No user email in localStorage -- skipping result email.');
             return;
         }
 
-        // Extract all actual scored values
+        // Extract actual scored values from the result object
         const percentages    = resultData?.percentages    || {};
         const highestTrait   = resultData?.highestTrait   || '';
         const secondaryTrait = resultData?.secondaryTrait || '';
@@ -38,59 +38,133 @@ async function sendResultEmail(userId, resultData) {
         const S = percentages.S ?? 0;
         const C = percentages.C ?? 0;
 
-        const traitNames = {
-            D: 'Dominance',
-            I: 'Influence',
-            S: 'Steadiness',
-            C: 'Conscientiousness'
-        };
-        const primaryName   = traitNames[highestTrait]   || highestTrait;
-        const secondaryName = traitNames[secondaryTrait] || secondaryTrait;
-        const minutesTaken  = Math.max(1, Math.round(timeTaken / 60));
+        const traitNames = { D: 'Dominance', I: 'Influence', S: 'Steadiness', C: 'Conscientiousness' };
+        const primaryName      = traitNames[highestTrait]   || highestTrait;
+        const secondaryName    = traitNames[secondaryTrait] || secondaryTrait;
+        const minutesTaken     = Math.max(1, Math.round(timeTaken / 60));
+        const secondaryDisplay = secondaryTrait
+            ? `${secondaryTrait} - ${secondaryName}`
+            : 'None';
 
-        // Formulate an explicit, self-contained prompt for the n8n AI agent
+        // Pre-build the complete HTML email with actual values already substituted.
+        // The AI agent in n8n only needs to fill [FILL:...] narrative sections,
+        // then call Gmail immediately -- no placeholder substitution needed.
+        const emailHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Your DISC Futura Report</title></head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f4f6;padding:30px 10px;">
+<tr><td align="center">
+<table role="presentation" width="100%" style="max-width:620px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.08);border:1px solid #e5e7eb;" cellspacing="0" cellpadding="0" border="0">
+
+  <tr><td style="background:linear-gradient(135deg,#065f46 0%,#047857 50%,#059669 100%);padding:36px 32px;text-align:center;">
+    <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;">DISC Futura</h1>
+    <p style="margin:6px 0 0;color:#a7f3d0;font-size:13px;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;">Powered by Inqisity</p>
+  </td></tr>
+
+  <tr><td style="padding:32px 32px 20px;">
+    <h2 style="margin:0 0 12px;font-size:22px;color:#111827;font-weight:700;">Your Behavioral Profile is Ready, ${userName}!</h2>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#4b5563;">Congratulations on completing your DISC Futura assessment! Here is your personalized behavioral profile.</p>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:24px;">
+      <tr>
+        <td width="48%" style="background-color:#ecfdf5;border:1.5px solid #10b981;border-radius:12px;padding:14px 18px;">
+          <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:#047857;letter-spacing:1px;">Primary Trait</div>
+          <div style="font-size:18px;font-weight:800;color:#064e3b;margin-top:4px;">${highestTrait} - ${primaryName}</div>
+        </td>
+        <td width="4%"></td>
+        <td width="48%" style="background-color:#f0fdfa;border:1.5px solid #14b8a6;border-radius:12px;padding:14px 18px;">
+          <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:#0f766e;letter-spacing:1px;">Secondary Trait</div>
+          <div style="font-size:18px;font-weight:800;color:#134e4a;margin-top:4px;">${secondaryDisplay}</div>
+        </td>
+      </tr>
+    </table>
+
+    <h3 style="margin:0 0 14px;font-size:16px;color:#111827;font-weight:700;text-transform:uppercase;">Trait Breakdown</h3>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f9fafb;border-radius:12px;padding:16px;margin-bottom:26px;">
+      <tr>
+        <td width="150" style="padding:8px 10px;font-weight:700;font-size:14px;color:#b91c1c;">D - Dominance</td>
+        <td width="55" style="padding:8px 10px;font-size:14px;font-weight:700;color:#374151;">${D}%</td>
+        <td style="padding:8px 10px;"><div style="background-color:#fee2e2;border-radius:9999px;height:10px;overflow:hidden;width:100%;"><div style="background-color:#ef4444;height:10px;width:${D}%;border-radius:9999px;"></div></div></td>
+      </tr>
+      <tr>
+        <td width="150" style="padding:8px 10px;font-weight:700;font-size:14px;color:#b45309;">I - Influence</td>
+        <td width="55" style="padding:8px 10px;font-size:14px;font-weight:700;color:#374151;">${I}%</td>
+        <td style="padding:8px 10px;"><div style="background-color:#fef3c7;border-radius:9999px;height:10px;overflow:hidden;width:100%;"><div style="background-color:#f59e0b;height:10px;width:${I}%;border-radius:9999px;"></div></div></td>
+      </tr>
+      <tr>
+        <td width="150" style="padding:8px 10px;font-weight:700;font-size:14px;color:#047857;">S - Steadiness</td>
+        <td width="55" style="padding:8px 10px;font-size:14px;font-weight:700;color:#374151;">${S}%</td>
+        <td style="padding:8px 10px;"><div style="background-color:#d1fae5;border-radius:9999px;height:10px;overflow:hidden;width:100%;"><div style="background-color:#10b981;height:10px;width:${S}%;border-radius:9999px;"></div></div></td>
+      </tr>
+      <tr>
+        <td width="150" style="padding:8px 10px;font-weight:700;font-size:14px;color:#1d4ed8;">C - Conscientiousness</td>
+        <td width="55" style="padding:8px 10px;font-size:14px;font-weight:700;color:#374151;">${C}%</td>
+        <td style="padding:8px 10px;"><div style="background-color:#dbeafe;border-radius:9999px;height:10px;overflow:hidden;width:100%;"><div style="background-color:#3b82f6;height:10px;width:${C}%;border-radius:9999px;"></div></div></td>
+      </tr>
+    </table>
+
+    <h3 style="margin:0 0 10px;font-size:16px;color:#111827;font-weight:700;">What This Means For You</h3>
+    <p style="margin:0 0 22px;font-size:14.5px;line-height:1.65;color:#374151;background-color:#f0fdf4;border-left:4px solid #059669;padding:14px 18px;border-radius:0 10px 10px 0;">
+      [FILL: 3-4 sentence behavioral analysis for a ${highestTrait}/${secondaryTrait || 'solo'} profile. Use name: ${userName}]
+    </p>
+
+    <h3 style="margin:0 0 10px;font-size:16px;color:#111827;font-weight:700;">Key Strengths</h3>
+    <ul style="margin:0 0 22px;padding-left:20px;font-size:14px;line-height:1.7;color:#374151;">
+      [FILL: 4 key strengths as &lt;li&gt; elements for ${highestTrait}/${secondaryTrait || 'solo'} DISC profile with &lt;strong&gt; titles]
+    </ul>
+
+    <h3 style="margin:0 0 10px;font-size:16px;color:#111827;font-weight:700;">Growth Opportunities</h3>
+    <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;line-height:1.7;color:#374151;">
+      [FILL: 2 growth opportunities as &lt;li&gt; elements, framed positively, for ${highestTrait}/${secondaryTrait || 'solo'} profile]
+    </ul>
+
+    <h3 style="margin:0 0 10px;font-size:16px;color:#111827;font-weight:700;">Working With Others</h3>
+    <p style="margin:0 0 28px;font-size:14px;line-height:1.65;color:#4b5563;">
+      [FILL: 2-3 sentences on how a ${highestTrait}/${secondaryTrait || 'solo'} DISC type communicates and collaborates in teams]
+    </p>
+
+    <div style="text-align:center;margin:30px 0 10px;">
+      <a href="https://dic-frontend.onrender.com/dashboard" style="display:inline-block;background:linear-gradient(135deg,#065f46,#059669);color:#ffffff;text-decoration:none;padding:14px 32px;font-size:15px;font-weight:700;border-radius:12px;box-shadow:0 4px 14px rgba(5,150,105,0.4);">View Full Interactive Report</a>
+    </div>
+  </td></tr>
+
+  <tr><td style="background-color:#f9fafb;padding:24px 32px;border-top:1px solid #e5e7eb;text-align:center;">
+    <p style="margin:0 0 6px;font-size:13px;color:#6b7280;font-weight:500;">DISC Futura Assessment Platform - Powered by Inqisity</p>
+    <p style="margin:0;font-size:12px;color:#9ca3af;">Completed in ${minutesTaken} minutes</p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+
+        const subject = `Your DISC Futura Behavioral Report is Ready, ${userName}!`;
+
+        // Send to n8n. The AI must ONLY:
+        //   1. Replace each [FILL:...] section with real generated content
+        //   2. Call the Gmail tool with: To, Subject, and the complete HTML body
         const chatMessage = [
             'trigger: assessment_complete',
             '',
-            'Please send a personalized DISC assessment result email to the user below using the Gmail send tool.',
-            'The email body MUST be rich responsive HTML with inline CSS and visual progress bars.',
+            'ACTION: Use the Gmail send tool immediately with:',
+            `To: ${userEmail}`,
+            `Subject: ${subject}`,
+            `Profile context for [FILL] sections: ${userName}, ${highestTrait}/${secondaryTrait || 'solo'}, D=${D}%, I=${I}%, S=${S}%, C=${C}%`,
             '',
-            'USER DETAILS:',
-            '- Name: ' + userName,
-            '- Email: ' + userEmail,
-            '- Phone: ' + userPhone,
-            '',
-            'DISC SCORES (use EXACTLY these numbers in the email — do not change or estimate):',
-            '- D (Dominance):         ' + D + '%',
-            '- I (Influence):         ' + I + '%',
-            '- S (Steadiness):        ' + S + '%',
-            '- C (Conscientiousness): ' + C + '%',
-            '',
-            'PERSONALITY PROFILE:',
-            '- Primary Trait:   ' + highestTrait + ' — ' + primaryName,
-            '- Secondary Trait: ' + (secondaryTrait ? secondaryTrait + ' — ' + secondaryName : 'None (single dominant style)'),
-            '- Time Taken: ' + minutesTaken + ' minutes',
-            '',
-            'INSTRUCTIONS:',
-            '1. Send email TO: ' + userEmail,
-            '2. Subject: Your DISC Futura Behavioral Report is Ready, ' + userName + '!',
-            '3. Use your HTML email template. Replace ALL placeholders with exact values:',
-            '   - Name: ' + userName,
-            '   - Primary Trait: ' + highestTrait + ' (' + primaryName + ')',
-            '   - Secondary Trait: ' + (secondaryTrait ? secondaryTrait + ' (' + secondaryName + ')' : 'None'),
-            '   - Scores: D=' + D + '%, I=' + I + '%, S=' + S + '%, C=' + C + '%',
-            '   - Generate a 3-4 sentence behavioral analysis tailored to this profile',
-            '   - Provide 4 key strengths and 2 growth opportunities',
-            '4. Pass the raw HTML directly to the Gmail send tool — no markdown fences, no backticks.',
+            'Email HTML body (replace all [FILL:...] placeholders with generated content, then send the complete HTML):',
+            emailHtml,
         ].join('\n');
 
         const payload = {
+            action:    'sendMessage',
             chatInput: chatMessage,
             message:   chatMessage,
             sessionId: `result_email_${userId}_${Date.now()}`,
+            user:      { id: userId, name: userName, email: userEmail, phone: userPhone },
             data: {
                 trigger: 'assessment_complete',
-                user:    { name: userName, email: userEmail, phone: userPhone },
                 result:  { highestTrait, secondaryTrait, percentages: { D, I, S, C }, timeTaken },
             },
         };
@@ -101,13 +175,12 @@ async function sendResultEmail(userId, resultData) {
             body:    JSON.stringify(payload),
         });
 
-        console.log('✅ Result email trigger sent to n8n:', { userName, userEmail, highestTrait, percentages: { D, I, S, C } });
+        console.log('Result email trigger sent:', { userName, userEmail, highestTrait, D, I, S, C });
     } catch (err) {
-        // Fire-and-forget — never block the success screen
         console.error('Failed to send result email via n8n:', err);
     }
 }
-// ─────────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------------
 
 export default function AssessmentPage() {
 
