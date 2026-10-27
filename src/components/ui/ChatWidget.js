@@ -80,25 +80,56 @@ export default function ChatWidget() {
         setInput('');
         setIsTyping(true);
 
-        // Instruct AI agent to keep responses to 1-2 lines unless detailed explanation is requested
-        const payloadMessage = `${text}\n\n[Instruction: Keep your answer to 1-2 concise lines maximum by default. Only give longer detailed answers if the user explicitly asks for details, examples, or elaboration.]`;
+        const userName  = (typeof window !== 'undefined' && localStorage.getItem('disc_user_name')) || 'User';
+        const userEmail = (typeof window !== 'undefined' && localStorage.getItem('disc_user_email')) || '';
+        const userPhone = (typeof window !== 'undefined' && localStorage.getItem('disc_user_phone')) || '';
+        const userId    = (typeof window !== 'undefined' && localStorage.getItem('disc_user_id')) || '';
+
+        // Helper to attempt fetch with retry for transient n8n LLM rate limits
+        const postWithRetry = async (retries = 2) => {
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try {
+                    const turnSessionId = `turn_${userId || 'guest'}_${Date.now()}`;
+                    const response = await fetch(N8N_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'sendMessage',
+                            message: text,
+                            chatInput: text,
+                            sessionId: turnSessionId,
+                            user: {
+                                id: userId,
+                                name: userName,
+                                email: userEmail,
+                                phone: userPhone,
+                            },
+                        }),
+                    });
+
+                    if (response.ok) {
+                        return response;
+                    }
+
+                    if (attempt < retries) {
+                        await new Promise(res => setTimeout(res, 1500));
+                        continue;
+                    }
+
+                    const errText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errText}`);
+                } catch (err) {
+                    if (attempt < retries) {
+                        await new Promise(res => setTimeout(res, 1500));
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+        };
 
         try {
-            const response = await fetch(N8N_WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: payloadMessage,
-                    chatInput: payloadMessage,
-                    sessionId: sessionId,
-                }),
-            });
-
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errText}`);
-            }
-
+            const response = await postWithRetry();
             const rawText = await response.text();
             let reply = rawText;
             try {

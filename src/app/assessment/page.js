@@ -28,23 +28,71 @@ async function sendResultEmail(userId, resultData) {
             return;
         }
 
-        const payloadData = JSON.stringify({
-            trigger: 'assessment_complete',
-            format: 'html',
-            instruction: 'CRITICAL: Generate the email body in FULL RESPONSIVE HTML WITH INLINE CSS and visual progress bars. Do NOT use plain text or markdown tables. Pass valid HTML to the Gmail send tool.',
-            user:   { name: userName, email: userEmail, phone: userPhone },
-            result: {
-                highestTrait:   resultData?.highestTrait   || '',
-                secondaryTrait: resultData?.secondaryTrait || '',
-                percentages:    resultData?.percentages    || {},
-                timeTaken:      resultData?.timeTaken      || 0,
-            },
-        });
+        // Extract all actual scored values
+        const percentages    = resultData?.percentages    || {};
+        const highestTrait   = resultData?.highestTrait   || '';
+        const secondaryTrait = resultData?.secondaryTrait || '';
+        const timeTaken      = resultData?.timeTaken      || 0;
+        const D = percentages.D ?? 0;
+        const I = percentages.I ?? 0;
+        const S = percentages.S ?? 0;
+        const C = percentages.C ?? 0;
+
+        const traitNames = {
+            D: 'Dominance',
+            I: 'Influence',
+            S: 'Steadiness',
+            C: 'Conscientiousness'
+        };
+        const primaryName   = traitNames[highestTrait]   || highestTrait;
+        const secondaryName = traitNames[secondaryTrait] || secondaryTrait;
+        const minutesTaken  = Math.max(1, Math.round(timeTaken / 60));
+
+        // Formulate an explicit, self-contained prompt for the n8n AI agent
+        const chatMessage = [
+            'trigger: assessment_complete',
+            '',
+            'Please send a personalized DISC assessment result email to the user below using the Gmail send tool.',
+            'The email body MUST be rich responsive HTML with inline CSS and visual progress bars.',
+            '',
+            'USER DETAILS:',
+            '- Name: ' + userName,
+            '- Email: ' + userEmail,
+            '- Phone: ' + userPhone,
+            '',
+            'DISC SCORES (use EXACTLY these numbers in the email — do not change or estimate):',
+            '- D (Dominance):         ' + D + '%',
+            '- I (Influence):         ' + I + '%',
+            '- S (Steadiness):        ' + S + '%',
+            '- C (Conscientiousness): ' + C + '%',
+            '',
+            'PERSONALITY PROFILE:',
+            '- Primary Trait:   ' + highestTrait + ' — ' + primaryName,
+            '- Secondary Trait: ' + (secondaryTrait ? secondaryTrait + ' — ' + secondaryName : 'None (single dominant style)'),
+            '- Time Taken: ' + minutesTaken + ' minutes',
+            '',
+            'INSTRUCTIONS:',
+            '1. Send email TO: ' + userEmail,
+            '2. Subject: Your DISC Futura Behavioral Report is Ready, ' + userName + '!',
+            '3. Use your HTML email template. Replace ALL placeholders with exact values:',
+            '   - Name: ' + userName,
+            '   - Primary Trait: ' + highestTrait + ' (' + primaryName + ')',
+            '   - Secondary Trait: ' + (secondaryTrait ? secondaryTrait + ' (' + secondaryName + ')' : 'None'),
+            '   - Scores: D=' + D + '%, I=' + I + '%, S=' + S + '%, C=' + C + '%',
+            '   - Generate a 3-4 sentence behavioral analysis tailored to this profile',
+            '   - Provide 4 key strengths and 2 growth opportunities',
+            '4. Pass the raw HTML directly to the Gmail send tool — no markdown fences, no backticks.',
+        ].join('\n');
 
         const payload = {
-            message:   payloadData,
-            chatInput: payloadData,
+            chatInput: chatMessage,
+            message:   chatMessage,
             sessionId: `result_email_${userId}_${Date.now()}`,
+            data: {
+                trigger: 'assessment_complete',
+                user:    { name: userName, email: userEmail, phone: userPhone },
+                result:  { highestTrait, secondaryTrait, percentages: { D, I, S, C }, timeTaken },
+            },
         };
 
         await fetch(N8N_WEBHOOK_URL, {
@@ -53,7 +101,7 @@ async function sendResultEmail(userId, resultData) {
             body:    JSON.stringify(payload),
         });
 
-        console.log('✅ Result email trigger sent to n8n');
+        console.log('✅ Result email trigger sent to n8n:', { userName, userEmail, highestTrait, percentages: { D, I, S, C } });
     } catch (err) {
         // Fire-and-forget — never block the success screen
         console.error('Failed to send result email via n8n:', err);
@@ -403,9 +451,10 @@ export default function AssessmentPage() {
             // 📧 Fire-and-forget: fetch result and trigger email via n8n
             try {
                 const resultData = await getResult(userId);
-                sendResultEmail(userId, resultData); // non-blocking
+                sendResultEmail(userId, resultData || result); // non-blocking
             } catch (e) {
-                console.warn('Could not fetch result for email trigger:', e.message);
+                console.warn('Could not fetch result for email trigger, falling back to submit result:', e.message);
+                sendResultEmail(userId, result);
             }
 
         } catch (error) {
