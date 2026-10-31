@@ -15,7 +15,7 @@ import Confetti from 'react-confetti';
 import { motion } from 'framer-motion';
 
 // --- Send result email via n8n AI agent ---
-const N8N_WEBHOOK_URL = 'https://arunpandian1997.app.n8n.cloud/webhook/chat';
+const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || 'https://jamesbond87t87.app.n8n.cloud/webhook/chat';
 
 async function sendResultEmail(userId, resultData) {
     try {

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
-const N8N_WEBHOOK_URL = 'https://arunpandian1997.app.n8n.cloud/webhook/chat';
+const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || 'https://jamesbond87t87.app.n8n.cloud/webhook/chat';
 
 function BotIcon({ size = 20, color = 'white' }) {
     return (
